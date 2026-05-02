@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zoom Meeting</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    #meetingSDKElement {
+      width: 100vw;
+      height: 100vh;
+    }
+    .zoom-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: rgba(255,255,255,0.5);
+      font-family: -apple-system, sans-serif;
+      font-size: 14px;
+      gap: 12px;
+    }
+    .zoom-spinner {
+      width: 24px; height: 24px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="meetingSDKElement">
+    <div class="zoom-loading">
+      <div class="zoom-spinner"></div>
+      <span>Connecting to Zoom...</span>
+    </div>
+  </div>
+
+  <script src="https://source.zoom.us/3.12.0/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/3.12.0/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/3.12.0/lib/vendor/redux.min.js"></script>
+  <script src="https://source.zoom.us/3.12.0/lib/vendor/redux-thunk.min.js"></script>
+  <script src="https://source.zoom.us/3.12.0/lib/vendor/lodash.min.js"></script>
+  <script src="https://source.zoom.us/meetingsdk/embedded/3.12.0/meetingsdk-embedded.min.js"></script>
+
+  <script>
+    // Listen for initialization message from parent
+    window.addEventListener('message', async function(event) {
+      if (!event.data || event.data.type !== 'zoom-init') return;
+
+      var data = event.data;
+
+      try {
+        var client = ZoomMtgEmbedded.createClient();
+
+        await client.init({
+          zoomAppRoot: document.getElementById('meetingSDKElement'),
+          language: 'en-US',
+          patchJsMedia: true,
+          leaveOnPageUnload: true,
+          customize: {
+            video: {
+              isResizable: false,
+              viewSizes: {
+                default: {
+                  width: window.innerWidth,
+                  height: window.innerHeight
+                }
+              }
+            }
+          }
+        });
+
+        await client.join({
+          signature: data.signature,
+          sdkKey: data.sdkKey,
+          meetingNumber: String(data.meetingNumber),
+          password: data.password,
+          userName: data.userName
+        });
+
+        window.parent.postMessage({ type: 'zoom-ready' }, '*');
+      } catch (err) {
+        console.error('Zoom init error:', err);
+        window.parent.postMessage({
+          type: 'zoom-error',
+          error: (err && err.message) ? err.message : String(err)
+        }, '*');
+      }
+    });
+
+    // Tell parent we're ready to receive init
+    window.parent.postMessage({ type: 'zoom-frame-ready' }, '*');
+  </script>
+</body>
+</html>

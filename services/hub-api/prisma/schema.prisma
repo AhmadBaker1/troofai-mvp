@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  apiKey    String   @unique @map("api_key")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  devices  Device[]
+  meetings Meeting[]
+  audits   AuditEvent[]
+
+  @@map("tenants")
+}
+
+model Device {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  userId        String       @map("user_id")
+  displayName   String       @map("display_name")
+  publicKeyPem  String       @map("public_key_pem") @db.Text
+  keyAlgorithm  String       @map("key_algorithm") @default("RSA-2048")
+  hardwareBound Boolean      @map("hardware_bound") @default(false)
+  status        DeviceStatus @default(ACTIVE)
+  lastHeartbeat DateTime?    @map("last_heartbeat")
+  enrolledAt    DateTime     @default(now()) @map("enrolled_at")
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  participants MeetingParticipant[]
+
+  @@map("devices")
+}
+
+enum DeviceStatus {
+  ACTIVE
+  REVOKED
+}
+
+model Meeting {
+  id        String    @id @default(uuid())
+  tenantId  String    @map("tenant_id")
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  endedAt   DateTime? @map("ended_at")
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  participants MeetingParticipant[]
+  audits       AuditEvent[]
+
+  @@map("meetings")
+}
+
+model MeetingParticipant {
+  id              String      @id @default(uuid())
+  meetingId       String      @map("meeting_id")
+  userId          String      @map("user_id")
+  deviceId        String?     @map("device_id")
+  displayName     String      @map("display_name")
+  trustStatus     TrustStatus @default(UNKNOWN) @map("trust_status")
+  statusReason    String?     @map("status_reason")
+  joinedAt        DateTime    @default(now()) @map("joined_at")
+  boundAt         DateTime?   @map("bound_at")
+  lastChallengeAt DateTime?   @map("last_challenge_at")
+
+  meeting Meeting @relation(fields: [meetingId], references: [id])
+  device  Device? @relation(fields: [deviceId], references: [id])
+
+  @@map("meeting_participants")
+}
+
+enum TrustStatus {
+  VERIFIED
+  UNVERIFIED
+  STALE
+  UNKNOWN
+  EXTERNAL
+  FAILED
+}
+
+model AuditEvent {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  meetingId String?  @map("meeting_id")
+  eventType String   @map("event_type")
+  actor     String
+  details   Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  meeting Meeting? @relation(fields: [meetingId], references: [id])
+
+  @@map("audit_events")
+}
